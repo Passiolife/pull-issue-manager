@@ -1,5 +1,7 @@
 name: Pull Issue Manager
-description: Enforces that a pull request is linked to an issue, and allows moving issues between zenhub pipelines upon certain actions
+description: >-
+  Enforces that a pull request is linked to an issue, and allows moving issues
+  between zenhub pipelines upon certain actions
 runs:
   using: node12
   main: dist/index.js
@@ -8,12 +10,22 @@ branding:
   color: gray-dark
 inputs:
   requireissue:
-    description: If true, this check will fail if there are no linked issues found
+    description: 'If true, this check will fail if there are no linked issues found'
     required: true
-    default: "true"
+    default: 'true'
   zhactionbranch:
-    description: Limits the action that moves issues to a specified ZenHub pipeline to push events on the given branch
-    required: true  
+    description: >-
+      Limits the action that moves issues to a specified ZenHub pipeline to
+      events on the given branch. If value is any (default), the action will
+      apply to any branch (always)
+    required: true
+    default: any
+  zhignorebranches:
+    description: >-
+      Limits the action that moves issues to a specified ZenHub pipeline to
+      events that are NOT on the given branches. Comma separated, no spaces
+      branchA,branchB
+    required: false
   zhapikey:
     description: Your ZenHub API Key
     required: true

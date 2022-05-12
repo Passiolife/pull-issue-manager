@@ -13,24 +13,27 @@ Toolkit.run(async (tools) => {
   const requiresIssue = tools.inputs.requireissue === "true";
   var owner = tools.context.repo.owner;
   var repo = tools.context.repo.repo;
+  var ignoreZHActionsOnBranch = false;
 
-  tools.log.info(
-    `context issue: ${JSON.stringify(tools.context.issue, null, 2)}`
-  );
-  tools.log.info(
-    `context pull: ${JSON.stringify(tools.context.pull, null, 2)}`
-  );
-  tools.log.info(`context: ${JSON.stringify(tools.context, null, 2)}`);
+  if (tools.inputs.zhignorebranches) {
+    for (let ib of tools.inputs.zhignorebranches.split(",")) {
+      if (tools.context.ref.endsWith(ib)) {
+        ignoreZHActionsOnBranch = true;
+        tools.log.info(
+          `will ignore ZenHub actions on this branch due to ignore setting: ${tools.inputs.zhignorebranches}`
+        );
+      }
+    }
+  }
 
   const { data: pr } = await tools.github.pulls.get({
-    ...tools.context.pull,
+    owner: owner,
+    repo: repo,
+    pull_number: tools.context.issue.issue_number,
   });
-
-  tools.log.info(`pr: ${JSON.stringify(tools.context.pull, null, 2)}`);
 
   if (pr.body) {
     bodyList.push(pr.body);
-    tools.log.info(`found pull body: ${pr.body}`);
   }
 
   const { data: comments } = await tools.github.pulls.listReviewComments({
@@ -46,7 +49,7 @@ Toolkit.run(async (tools) => {
   });
 
   tools.log.info(
-    `found review ${comments.length} comments to scan on the pull`
+    `found ${comments.length} review comments and ${commits.length} commit messages to scan on the pull`
   );
 
   for (let comment of comments) {
@@ -54,7 +57,6 @@ Toolkit.run(async (tools) => {
   }
 
   for (let commit of commits) {
-    tools.log.info(`commit: ${JSON.stringify(commit, null, 2)}`);
     bodyList.push(commit.commit.message);
   }
 
@@ -75,7 +77,7 @@ Toolkit.run(async (tools) => {
   if (unique.length <= 0) {
     if (requiresIssue === true) {
       tools.exit.failure(
-        "requireissue is set to true, and no issues were found. Please edit the pull request message to contain a fix reference."
+        "RequireIssue is set to true, and no issues were found. Please edit the pull request message to contain a fix reference."
       );
       return;
     } else {
@@ -88,9 +90,13 @@ Toolkit.run(async (tools) => {
   var numAttemptMoved = 0;
   var numMoved = 0;
 
+  tools.log.info(
+    `user defined action branch: ${zhActionBranch} / current ref: ${tools.context.ref}`
+  );
+
   if (
-    tools.context.ref.endsWith(zhActionBranch) &&
-    tools.context.event === "push"
+    (zhActionBranch === "any" || tools.context.ref.endsWith(zhActionBranch)) &&
+    !ignoreZHActionsOnBranch
   ) {
     tools.log.info(`found a push event on selected branch - moving issues`);
 
@@ -100,18 +106,14 @@ Toolkit.run(async (tools) => {
 
       // get the board to locate the pipeline by name
       var board = null;
-      api
-        .getBoard({ repo_id: tools.context.payload.repository?.id })
+      await api
+        .getBoard({ repo_id: tools.context.payload.repository.id })
         .then((data) => {
           board = data;
         })
         .catch((e) => {
           tools.exit.failure(`unable to retreive zenhub board for repo: ${e}`);
         });
-
-      // todo: remove
-      tools.log.info(`repo id: ${tools.context.payload.repository?.id}`);
-      tools.log.info(`board: ${JSON.stringify(board, null, 2)}`);
 
       if (board) {
         var targetPipelineId = null;
@@ -125,9 +127,9 @@ Toolkit.run(async (tools) => {
         if (targetPipelineId) {
           // move the issue to the pipeline
           var cpAction = null;
-          api
+          await api
             .changePipeline({
-              repo_id: tools.context.payload.repository?.id,
+              repo_id: tools.context.payload.repository.id,
               issue_number: iid,
               body: {
                 pipeline_id: targetPipelineId,
@@ -135,30 +137,19 @@ Toolkit.run(async (tools) => {
               },
             })
             .then((data) => {
-              cpAction = data;
+              // this doesnt return anything... so we increase the count of success here:
+              numMoved += 1;
             })
             .catch((e) => {
-              tools.log.error(
-                `setting issue #${iid} column to ${zhPipelineName} failed: ${e}`
-              );
+              if (e) {
+                tools.log.error(
+                  `caught an error when moving issue ${iid} to ${zhPipelineName}: ${e}`
+                );
+                numMoved -= 1;
+              }
             });
 
-          // todo: remove
-          tools.log.info(
-            `change pipeline result: ${JSON.stringify(cpAction, null, 2)}`
-          );
-
           numAttemptMoved += 1;
-          if (cpAction == 200) {
-            numMoved += 1;
-            tools.log.info(
-              `setting issue #${iid} column to ${zhPipelineName} success`
-            );
-          } else {
-            tools.log.info(
-              `setting issue #${iid} column to ${zhPipelineName} failed: ${cpAction}`
-            );
-          }
         } else {
           tools.log.info(
             `unable to locate a zenhub pipeline named '${zhPipelineName}'`
@@ -166,7 +157,7 @@ Toolkit.run(async (tools) => {
         }
       } else {
         tools.log.info(
-          `unable to locate a zenhub board for repo: '${repo}' (${tools.context.payload.repository?.id})`
+          `unable to locate a zenhub board for repo: '${repo}' (${tools.context.payload.repository.id})`
         );
       }
     }
