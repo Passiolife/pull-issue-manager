@@ -14,6 +14,8 @@ Toolkit.run(async (tools) => {
   var owner = tools.context.repo.owner;
   var repo = tools.context.repo.repo;
   var ignoreZHActionsOnBranch = false;
+  
+  tools.log.info(`incoming ref: ${tools.context.ref}`);
 
   if (tools.inputs.zhignorebranches) {
     for (let ib of tools.inputs.zhignorebranches.split(",")) {
@@ -101,6 +103,16 @@ Toolkit.run(async (tools) => {
     tools.log.info(`found a push event on selected branch - moving issues`);
 
     for (let iid of unique) {
+      // don't work on closed tickets
+      let oIssue = await tools.github.issues.get({
+        owner: owner,
+        repo: repo,
+        issue_number: iid
+      });
+      if (oIssue && oIssue.data.state === "closed") {
+        tools.log.info(`skipping issue #${iid} as it is closed.`);
+        continue;
+      }
       // connect to ZH
       const api = new ZenHub(zhApiKey);
 
