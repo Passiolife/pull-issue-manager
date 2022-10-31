@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "actions-toolkit": "^5.0.0",
-    "zenhub-api": "^0.2.0"
+    "zenhub-api": "Passiolife/zenhub-api#master"
   },
   "devDependencies": {
     "jest": "^26.0.1",

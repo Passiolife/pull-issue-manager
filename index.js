@@ -1,5 +1,5 @@
-const { Toolkit } = require("actions-toolkit");
-const ZenHub = require("zenhub-api");
+import { Toolkit } from "actions-toolkit";
+import ZenHub from "zenhub-api";
 
 // g1 is the keyword | g2 is issue number without #
 const ISSUE_KW =
@@ -138,7 +138,6 @@ Toolkit.run(async (tools) => {
 
         if (targetPipelineId) {
           // move the issue to the pipeline
-          var cpAction = null;
           await api
             .changePipeline({
               repo_id: tools.context.payload.repository.id,
@@ -148,7 +147,7 @@ Toolkit.run(async (tools) => {
                 position: "top",
               },
             })
-            .then((data) => {
+            .then(() => {
               // this doesnt return anything... so we increase the count of success here:
               numMoved += 1;
             })
